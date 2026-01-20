@@ -354,4 +354,271 @@ void removeHero(Node **head) {
     }
 }
 
+void searchByName(Node *head) {
+    if (head == NULL) {
+        printf("(lista pusta)\n");
+        return;
+    }
 
+    printf("\nWyszukiwanie po imieniu:\n");
+    printf("1) pelne dopasowanie\n");
+    printf("2) dopasowanie prefiksowe\n");
+
+    int option = readIntInRange("Wybor: ", 1, 2);
+
+    if (option == 1) {
+        char name[NAME_MAX_LEN + 1];
+        readText("Imie: ", name, sizeof(name));
+
+        Node *found = findByName(head, name);
+        if (found == NULL) {
+            printf("Brak wynikow.\n");
+            return;
+        }
+
+        printHeader();
+        printHero(&found->data);
+        printf("-------------------------------------------------------------------------------------------------\n");
+    } else {
+        char prefix[NAME_MAX_LEN + 1];
+        int foundAny = 0;
+
+        readText("Prefiks: ", prefix, sizeof(prefix));
+        if (prefix[0] == '\0') {
+            printf("Blad: prefiks nie moze byc pusty.\n");
+            return;
+        }
+
+        printHeader();
+        Node *cur = head;
+        while (cur != NULL) {
+            if (strncmp(cur->data.name, prefix, strlen(prefix)) == 0) {
+                printHero(&cur->data);
+                foundAny = 1;
+            }
+            cur = cur->next;
+        }
+        printf("-------------------------------------------------------------------------------------------------\n");
+
+        if (!foundAny) printf("Brak wynikow.\n");
+    }
+}
+
+void searchByLevel(Node *head) {
+    if (head == NULL) {
+        printf("(lista pusta)\n");
+        return;
+    }
+
+    int minLevel = readIntInRange("Wyszukaj: poziom >= ", 1, 9999);
+
+    int foundAny = 0;
+    printHeader();
+
+    Node *cur = head;
+    while (cur != NULL) {
+        if (cur->data.level >= minLevel) {
+            printHero(&cur->data);
+            foundAny = 1;
+        }
+        cur = cur->next;
+    }
+
+    printf("-------------------------------------------------------------------------------------------------\n");
+    if (!foundAny) printf("Brak wynikow.\n");
+}
+
+void sortByName(Node *head) {
+    if (head == NULL) {
+        printf("(lista pusta)\n");
+        return;
+    }
+
+    int count = countNodes(head);
+    Hero *arr = (Hero*)malloc(sizeof(Hero) * count);
+    if (arr == NULL) {
+        printf("Blad: brak pamieci (sortowanie).\n");
+        return;
+    }
+
+    int i = 0;
+    Node *cur = head;
+    while (cur != NULL) {
+        arr[i] = cur->data;
+        i++;
+        cur = cur->next;
+    }
+
+    int swapped;
+    do {
+        swapped = 0;
+        for (i = 0; i < count - 1; i++) {
+            if (strcmp(arr[i].name, arr[i + 1].name) > 0) {
+                Hero tmp = arr[i];
+                arr[i] = arr[i + 1];
+                arr[i + 1] = tmp;
+                swapped = 1;
+            }
+        }
+    } while (swapped);
+
+    printf("\n=== Posortowana kopia (po imieniu) ===\n");
+    printHeader();
+    for (i = 0; i < count; i++) printHero(&arr[i]);
+    printf("-------------------------------------------------------------------------------------------------\n");
+
+    free(arr);
+}
+
+void sortByLevel(Node *head) {
+    if (head == NULL) {
+        printf("(lista pusta)\n");
+        return;
+    }
+
+    int count = countNodes(head);
+    Hero *arr = (Hero*)malloc(sizeof(Hero) * count);
+    if (arr == NULL) {
+        printf("Blad: brak pamieci (sortowanie).\n");
+        return;
+    }
+
+    int i = 0;
+    Node *cur = head;
+    while (cur != NULL) {
+        arr[i] = cur->data;
+        i++;
+        cur = cur->next;
+    }
+
+    int swapped;
+    do {
+        swapped = 0;
+        for (i = 0; i < count - 1; i++) {
+            if (arr[i].level > arr[i + 1].level ||
+               (arr[i].level == arr[i + 1].level &&
+                strcmp(arr[i].name, arr[i + 1].name) > 0)) {
+                Hero tmp = arr[i];
+                arr[i] = arr[i + 1];
+                arr[i + 1] = tmp;
+                swapped = 1;
+            }
+        }
+    } while (swapped);
+
+    printf("\n=== Posortowana kopia (po poziomie) ===\n");
+    printHeader();
+    for (i = 0; i < count; i++) printHero(&arr[i]);
+    printf("-------------------------------------------------------------------------------------------------\n");
+
+    free(arr);
+}
+
+void saveToFile(Node *head, const char *filename) {
+    FILE *f = fopen(filename, "w");
+    if (!f) {
+        printf("Blad: nie moge otworzyc pliku do zapisu: %s\n", filename);
+        return;
+    }
+
+    Node *cur = head;
+    while (cur != NULL) {
+        fprintf(f, "%s|%s|%s|%d|%d|%d\n",
+                cur->data.name, cur->data.race, cur->data.className,
+                cur->data.level, cur->data.reputation, (int)cur->data.status);
+        cur = cur->next;
+    }
+
+    fclose(f);
+}
+
+void freeList(Node **head) {
+    while (*head != NULL) {
+        Node *toDelete = *head;
+        *head = (*head)->next;
+        free(toDelete);
+    }
+}
+
+void loadFromFile(Node **head, const char *filename) {
+    FILE *f = fopen(filename, "r");
+    if (!f) {
+        printf("Brak pliku (%s) - start od pustej listy.\n", filename);
+        return;
+    }
+
+    freeList(head);
+
+    char line[256];
+    int lineNumber = 0;
+
+    while (fgets(line, sizeof(line), f) != NULL) {
+        lineNumber++;
+
+        Hero h;
+        int statusValue;
+
+        int ok = sscanf(line,
+                        " %100[^|]|%50[^|]|%50[^|]|%d|%d|%d",
+                        h.name, h.race, h.className,
+                        &h.level, &h.reputation, &statusValue);
+
+        if (ok != 6) {
+            printf("Uwaga: zly format w pliku, linia %d (pomijam).\n", lineNumber);
+            continue;
+        }
+
+        if (h.name[0] == '\0' || h.race[0] == '\0' || h.className[0] == '\0') {
+            printf("Uwaga: puste pole w pliku, linia %d (pomijam).\n", lineNumber);
+            continue;
+        }
+
+        if (h.level < 1 || h.reputation < 0 || h.reputation > 100 ||
+            statusValue < 1 || statusValue > 5) {
+            printf("Uwaga: zle dane w pliku, linia %d (pomijam).\n", lineNumber);
+            continue;
+        }
+
+        h.status = (Status)statusValue;
+
+        if (findByName(*head, h.name) != NULL) {
+            printf("Uwaga: duplikat imienia w pliku, linia %d (pomijam).\n", lineNumber);
+            continue;
+        }
+
+        Node *n = (Node*)malloc(sizeof(Node));
+        if (!n) {
+            printf("Blad: brak pamieci podczas wczytywania.\n");
+            fclose(f);
+            return;
+        }
+
+        n->data = h;
+        n->next = NULL;
+        appendNode(head, n);
+    }
+
+    fclose(f);
+    printf("Wczytano dane z pliku: %s\n", filename);
+}
+
+void handleMenu(Node **head) {
+    int choice;
+
+    do {
+        showMenu();
+        choice = readIntInRange("Wybor: ", 0, 8);
+
+        if (choice == 1) addHero(head);
+        else if (choice == 2) editHero(*head);
+        else if (choice == 3) removeHero(head);
+        else if (choice == 4) searchByName(*head);
+        else if (choice == 5) searchByLevel(*head);
+        else if (choice == 6) sortByName(*head);
+        else if (choice == 7) sortByLevel(*head);
+        else if (choice == 8) displayAll(*head);
+
+    } while (choice != 0);
+
+    printf("Koniec programu\n");
+}
